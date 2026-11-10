@@ -1,0 +1,5 @@
+                                                                                [bronze] downloaded https://data.insideairbnb.com/the-netherlands/north-holland/amsterdam/2026-09-16/data/listings.csv.gz -> D:/bd2/data/raw/amsterdam/2026-09-16/listings.csv.gz (5,865,252 bytes)
+[bronze] amsterdam 2026-09-16: 10,612 rows, 94 columns
+[silver] amsterdam: 10,612 rows | bronze_rows=10612, dropped_missing_id=0, dropped_duplicate_id=0, dropped_missing_core_fields=0, silver_rows=10612, optional_columns_missing=0, price_status_high_outlier=112, price_status_ok=5927, price_status_missing=4573
+[gold] amsterdam: {'gold_listing_features': 10612, 'gold_city_metrics': 1, 'gold_neighbourhood_metrics': 22, 'gold_room_type_metrics': 4}
+EXIT CODE: 0

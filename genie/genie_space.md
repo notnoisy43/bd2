@@ -39,7 +39,11 @@ Model
   (predicts less than the real price); error > 0 means it OVER-prices it.
 - Evaluate the model only on honest rows: price_status = 'ok' AND (split = 'test' OR city_role = 'new_city').
   Training-split rows of Brussels/Antwerp were seen during training and must not be used for error statistics.
-- If several model versions exist and the question does not say which, use the latest model_version per city and say which one you used.
+- Model versions: v1 = week-1 model (Brussels + Antwerp), v2 = relative-price model trained on Brussels + Antwerp only,
+  v3 = relative-price model retrained with Amsterdam. If the question does not name a version, use the PRODUCTION model:
+  v1 for brussels and antwerp, v3 for amsterdam:
+  ((city IN ('brussels','antwerp') AND model_version = 'v1') OR (city = 'amsterdam' AND model_version = 'v3')).
+  Say which version you used.
 - MAE = mean absolute error = AVG(abs_error). The baseline is the median price for the same room type and number of guests (baseline_price).
 - For "where" questions about the model, group by city and neighbourhood and require at least 15 listings.
 
@@ -65,12 +69,15 @@ ORDER BY listings DESC
 LIMIT 10;
 ```
 
-**Where does the model under-price listings the most?**  Expected (v1, test split): Saint-Gilles, Brussels (mean error −€12, 79 listings), then Forest and Bruxelles
+**Where does the model under-price listings the most?**  Expected (production models, honest rows): Centrum-Oost, Amsterdam
+(v3, mean error −€49, 132 listings), then Oud-Oost and Zuid. Restricted to cities A and B (v1): Saint-Gilles, Brussels (−€12, 79 listings),
+then Forest and Bruxelles.
 ```sql
 SELECT model_version, city, neighbourhood, COUNT(*) AS listings,
        ROUND(AVG(error), 1) AS mean_error_eur, ROUND(AVG(abs_error), 1) AS mae_eur
 FROM workspace.airbnb_benelux.gold_predictions
 WHERE price_status = 'ok' AND (split = 'test' OR city_role = 'new_city')
+  AND ((city IN ('brussels', 'antwerp') AND model_version = 'v1') OR (city = 'amsterdam' AND model_version = 'v3'))
 GROUP BY model_version, city, neighbourhood
 HAVING COUNT(*) >= 15
 ORDER BY mean_error_eur ASC
@@ -83,6 +90,14 @@ SELECT model_version, city, evaluation_set, n, mae_baseline, mae_model,
        ROUND(improvement_vs_baseline * 100, 1) AS improvement_pct
 FROM workspace.airbnb_benelux.gold_model_metrics
 ORDER BY model_version, city;
+```
+
+**How did the model do on the new city?**  Expected: v1 €172, v2 €109, v3 €83 on Amsterdam's test split
+```sql
+SELECT model_version, city, evaluation_set, n, mae_model, mae_baseline
+FROM workspace.airbnb_benelux.gold_model_metrics
+WHERE city = 'amsterdam'
+ORDER BY evaluation_set, model_version;
 ```
 
 **Compare the cities**
@@ -101,6 +116,8 @@ ORDER BY listings DESC;
 * How much better than the baseline is the model in each city?
 * Which city has the highest share of multi-listing hosts?
 * Show the 10 listings in Antwerp the model over-prices most.
+* What is the median price of entire homes in City C, and how does it compare with City A?
+* How much worse is the model in Amsterdam than in Brussels and Antwerp?
 
 ## 5. Configuration tricks and why we used them
 

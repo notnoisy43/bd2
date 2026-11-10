@@ -43,24 +43,38 @@
       ]
     },
     {
+      "name": "ds_metrics_test",
+      "displayName": "metrics_test",
+      "queryLines": [
+        "SELECT model_version, city, mae_model, mae_baseline\nFROM workspace.airbnb_benelux.gold_model_metrics\nWHERE evaluation_set = 'test split' AND city <> 'ALL TRAINING CITIES'"
+      ]
+    },
+    {
+      "name": "ds_dq",
+      "displayName": "dq",
+      "queryLines": [
+        "SELECT city, layer, metric, ROUND(value, 3) AS value, check_status\nFROM workspace.airbnb_benelux.dq_metrics\nWHERE check_status = 'warn'\nORDER BY city, layer, metric"
+      ]
+    },
+    {
       "name": "ds_eval",
       "displayName": "eval",
       "queryLines": [
-        "SELECT model_version, city, city_role, listing_id, name, room_type, neighbourhood, accommodates,\n       price, predicted_price, baseline_price, error, abs_error, baseline_abs_error, listing_url\nFROM workspace.airbnb_benelux.gold_predictions\nWHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')"
+        "SELECT model_version, city, concat(city, ' · ', model_version) AS series, city_role, listing_id, name, room_type, neighbourhood, accommodates,\n       price, predicted_price, baseline_price, error, abs_error, baseline_abs_error, listing_url\nFROM workspace.airbnb_benelux.gold_predictions\nWHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')"
       ]
     },
     {
       "name": "ds_err_room",
       "displayName": "err_room",
       "queryLines": [
-        "SELECT model_version, city, room_type, COUNT(*) AS n,\n       ROUND(AVG(abs_error), 1) AS mae_model, ROUND(AVG(baseline_abs_error), 1) AS mae_baseline\nFROM workspace.airbnb_benelux.gold_predictions\nWHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')\nGROUP BY model_version, city, room_type\nHAVING COUNT(*) >= 5"
+        "SELECT model_version, city, concat(city, ' · ', model_version) AS series, room_type, COUNT(*) AS n,\n       ROUND(AVG(abs_error), 1) AS mae_model, ROUND(AVG(baseline_abs_error), 1) AS mae_baseline\nFROM workspace.airbnb_benelux.gold_predictions\nWHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')\nGROUP BY model_version, city, room_type\nHAVING COUNT(*) >= 5"
       ]
     },
     {
       "name": "ds_err_nbhd",
       "displayName": "err_nbhd",
       "queryLines": [
-        "SELECT model_version, city, neighbourhood, COUNT(*) AS n,\n       ROUND(AVG(error), 1) AS mean_error, ROUND(AVG(abs_error), 1) AS mae_model,\n       concat(city, ' · ', neighbourhood) AS city_neighbourhood\nFROM workspace.airbnb_benelux.gold_predictions\nWHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')\nGROUP BY model_version, city, neighbourhood\nHAVING COUNT(*) >= 15"
+        "SELECT model_version, city, neighbourhood, COUNT(*) AS n,\n       ROUND(AVG(error), 1) AS mean_error, ROUND(AVG(abs_error), 1) AS mae_model,\n       concat(city, ' · ', neighbourhood) AS city_neighbourhood, concat(city, ' · ', model_version) AS series\nFROM workspace.airbnb_benelux.gold_predictions\nWHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')\nGROUP BY model_version, city, neighbourhood\nHAVING COUNT(*) >= 15"
       ]
     },
     {
@@ -82,9 +96,9 @@
             "name": "text_1",
             "multilineTextboxSpec": {
               "lines": [
-                "## Brussels has twice Antwerp's listings, but prices are almost the same: median €125 vs €130",
+                "## Amsterdam costs 2.3x Belgium (median €285 vs €125-130), and 42 % of its calendars are closed",
                 "",
-                "Per-city supply, price, availability, reviews and hosts. Price figures exclude missing and outlier prices (`price_status = 'ok'`)."
+                "Per-city supply, price, availability, reviews and hosts. Price figures exclude missing and outlier prices (`price_status = 'ok'`; ceiling = 8x city median)."
               ]
             }
           },
@@ -762,9 +776,9 @@
             "name": "text_9",
             "multilineTextboxSpec": {
               "lines": [
-                "## Antwerp is more 'professional' (84 % entire homes, 61 % multi-listing hosts); Brussels earns more per listing",
+                "## Brussels and Antwerp price alike; what differs is the mix (Antwerp: 84 % entire homes, 61 % multi-listing hosts)",
                 "",
-                "Side-by-side metrics for every city. The difference that matters for pricing is the mix, not the price level."
+                "Side-by-side metrics for every city. Amsterdam is the outlier on every axis: price, availability, and hosts (19 % multi-listing)."
               ]
             }
           },
@@ -1050,9 +1064,9 @@
             "name": "text_14",
             "multilineTextboxSpec": {
               "lines": [
-                "## The model beats the baseline by ~30 % in Brussels and Antwerp (MAE €35 vs €50), and under-prices the expensive tail",
+                "## v1 beats the baseline by 30 % at home but under-priced Amsterdam by €168; the relative model retrained on Amsterdam (v3) cuts its MAE from €172 to €83",
                 "",
-                "Honest evaluation: 20 % test split for training cities, every priced listing for a new city."
+                "Honest evaluation: 20 % test split for training cities, every priced listing (and the test split) for a new city. v1 = frozen week-1 model, v2 = relative price (A+B only), v3 = relative price retrained with Amsterdam."
               ]
             }
           },
@@ -1321,7 +1335,204 @@
         },
         {
           "widget": {
-            "name": "scatter_16",
+            "name": "bar_16",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_metrics_test",
+                  "fields": [
+                    {
+                      "name": "model_version",
+                      "expression": "`model_version`"
+                    },
+                    {
+                      "name": "mae_model",
+                      "expression": "`mae_model`"
+                    },
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "model_version",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "model_version"
+                },
+                "y": {
+                  "fieldName": "mae_model",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "mae_model"
+                },
+                "color": {
+                  "fieldName": "city",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "city"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Test-split MAE by model version and city (EUR)",
+                "showDescription": true,
+                "description": "Amsterdam: v1 172, v2 109, v3 83. C-local baseline: 111."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 33,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "table_17",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_dq",
+                  "fields": [
+                    {
+                      "name": "city",
+                      "expression": "`city`"
+                    },
+                    {
+                      "name": "layer",
+                      "expression": "`layer`"
+                    },
+                    {
+                      "name": "metric",
+                      "expression": "`metric`"
+                    },
+                    {
+                      "name": "value",
+                      "expression": "`value`"
+                    },
+                    {
+                      "name": "check_status",
+                      "expression": "`check_status`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "city",
+                    "displayName": "city",
+                    "title": "city",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 0,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "alignContent": "left"
+                  },
+                  {
+                    "fieldName": "layer",
+                    "displayName": "layer",
+                    "title": "layer",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 1,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "alignContent": "left"
+                  },
+                  {
+                    "fieldName": "metric",
+                    "displayName": "metric",
+                    "title": "metric",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 2,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "alignContent": "left"
+                  },
+                  {
+                    "fieldName": "value",
+                    "displayName": "value",
+                    "title": "value",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 3,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "alignContent": "left"
+                  },
+                  {
+                    "fieldName": "check_status",
+                    "displayName": "check_status",
+                    "title": "check_status",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 4,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "alignContent": "left"
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "allowHTMLByDefault": false,
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "condensed": true,
+              "withRowNumber": false,
+              "frame": {
+                "showTitle": true,
+                "title": "Pipeline warnings (data-quality and scoring-coverage checks added after the first city-C run)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 33,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "scatter_18",
             "queries": [
               {
                 "name": "main_query",
@@ -1337,8 +1548,8 @@
                       "expression": "`predicted_price`"
                     },
                     {
-                      "name": "city",
-                      "expression": "`city`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": true
@@ -1364,11 +1575,11 @@
                   "displayName": "predicted_price"
                 },
                 "color": {
-                  "fieldName": "city",
+                  "fieldName": "series",
                   "scale": {
                     "type": "categorical"
                   },
-                  "displayName": "city"
+                  "displayName": "series"
                 }
               },
               "frame": {
@@ -1388,7 +1599,7 @@
         },
         {
           "widget": {
-            "name": "bar_17",
+            "name": "bar_19",
             "queries": [
               {
                 "name": "main_query",
@@ -1404,8 +1615,8 @@
                       "expression": "`mae_model`"
                     },
                     {
-                      "name": "city",
-                      "expression": "`city`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": true
@@ -1431,11 +1642,11 @@
                   "displayName": "mae_model"
                 },
                 "color": {
-                  "fieldName": "city",
+                  "fieldName": "series",
                   "scale": {
                     "type": "categorical"
                   },
-                  "displayName": "city"
+                  "displayName": "series"
                 }
               },
               "frame": {
@@ -1453,7 +1664,7 @@
         },
         {
           "widget": {
-            "name": "bar_18",
+            "name": "bar_20",
             "queries": [
               {
                 "name": "main_query",
@@ -1469,8 +1680,8 @@
                       "expression": "`mean_error`"
                     },
                     {
-                      "name": "city",
-                      "expression": "`city`"
+                      "name": "series",
+                      "expression": "`series`"
                     }
                   ],
                   "disaggregated": true
@@ -1499,11 +1710,11 @@
                   "displayName": "mean error (EUR)"
                 },
                 "color": {
-                  "fieldName": "city",
+                  "fieldName": "series",
                   "scale": {
                     "type": "categorical"
                   },
-                  "displayName": "city"
+                  "displayName": "series"
                 }
               },
               "frame": {
@@ -1521,7 +1732,7 @@
         },
         {
           "widget": {
-            "name": "table_19",
+            "name": "table_21",
             "queries": [
               {
                 "name": "main_query",

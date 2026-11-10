@@ -36,14 +36,25 @@ SELECT model_version, city, city_role, evaluation_set, n, mae_baseline, mae_mode
 FROM workspace.airbnb_benelux.gold_model_metrics
 ORDER BY model_version, city_role DESC, city;
 
+-- ds_metrics_test
+SELECT model_version, city, mae_model, mae_baseline
+FROM workspace.airbnb_benelux.gold_model_metrics
+WHERE evaluation_set = 'test split' AND city <> 'ALL TRAINING CITIES';
+
+-- ds_dq
+SELECT city, layer, metric, ROUND(value, 3) AS value, check_status
+FROM workspace.airbnb_benelux.dq_metrics
+WHERE check_status = 'warn'
+ORDER BY city, layer, metric;
+
 -- ds_eval
-SELECT model_version, city, city_role, listing_id, name, room_type, neighbourhood, accommodates,
+SELECT model_version, city, concat(city, ' · ', model_version) AS series, city_role, listing_id, name, room_type, neighbourhood, accommodates,
        price, predicted_price, baseline_price, error, abs_error, baseline_abs_error, listing_url
 FROM workspace.airbnb_benelux.gold_predictions
 WHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test');
 
 -- ds_err_room
-SELECT model_version, city, room_type, COUNT(*) AS n,
+SELECT model_version, city, concat(city, ' · ', model_version) AS series, room_type, COUNT(*) AS n,
        ROUND(AVG(abs_error), 1) AS mae_model, ROUND(AVG(baseline_abs_error), 1) AS mae_baseline
 FROM workspace.airbnb_benelux.gold_predictions
 WHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')
@@ -53,7 +64,7 @@ HAVING COUNT(*) >= 5;
 -- ds_err_nbhd
 SELECT model_version, city, neighbourhood, COUNT(*) AS n,
        ROUND(AVG(error), 1) AS mean_error, ROUND(AVG(abs_error), 1) AS mae_model,
-       concat(city, ' · ', neighbourhood) AS city_neighbourhood
+       concat(city, ' · ', neighbourhood) AS city_neighbourhood, concat(city, ' · ', model_version) AS series
 FROM workspace.airbnb_benelux.gold_predictions
 WHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')
 GROUP BY model_version, city, neighbourhood

@@ -116,11 +116,21 @@ def build_silver(bronze: DataFrame) -> tuple[DataFrame, dict]:
              .withColumn("beds", F.when(F.col("beds") <= 30, F.col("beds")))
              .withColumn("is_long_stay", F.col("minimum_nights") >= config.LONG_STAY_MIN_NIGHTS)
              .withColumn("is_active", (F.col("availability_365") > 0) | (F.col("number_of_reviews_ltm") > 0))
-             .withColumn("is_multi_listing_host", F.col("calculated_host_listings_count") > 1)
+             .withColumn("is_multi_listing_host", F.col("calculated_host_listings_count") > 1))
+
+    # --- price outlier flag, relative to the city's own price level -------------------------
+    # [city-C pipeline fix P1] week 1 used a fixed 1000 EUR ceiling, tuned to Belgian prices.  In
+    # Amsterdam (median 2.2x Brussels) it flagged 112 genuine, reviewed 4-guest homes as outliers.
+    # The ceiling is now PRICE_HIGH_MULTIPLE x the city's median price (= ~1000 EUR in Brussels).
+    med = (typed.where(F.col("price") >= config.PRICE_LOW)
+                .agg(F.percentile_approx("price", 0.5).alias("city_median_price")))
+    typed = (typed.crossJoin(F.broadcast(med))
+             .withColumn("price_high_threshold",
+                         F.round(F.col("city_median_price") * config.PRICE_HIGH_MULTIPLE, 2))
              .withColumn("price_status",
                          F.when(F.col("price").isNull(), "missing")
                           .when(F.col("price") < config.PRICE_LOW, "low_outlier")
-                          .when(F.col("price") > config.PRICE_HIGH, "high_outlier")
+                          .when(F.col("price") > F.col("price_high_threshold"), "high_outlier")
                           .otherwise("ok")))
 
     # --- row filters (counted) -------------------------------------------------------------
@@ -146,13 +156,36 @@ def build_silver(bronze: DataFrame) -> tuple[DataFrame, dict]:
         "optional_columns_missing": len(added),
         **{f"price_status_{k}": v for k, v in status.items()},
     }
+    # [city-C pipeline fix P2] expectations: week 1 accepted a 43 % missing target without a word.
+    n_silver = max(dq["silver_rows"], 1)
+    n_priced = max(n_silver - status.get("missing", 0), 1)
+    dq["price_missing_share"] = round(status.get("missing", 0) / n_silver, 4)
+    dq["availability_zero_share"] = round(silver.where(F.col("availability_365") == 0).count() / n_silver, 4)
+    dq["high_outlier_share_of_priced"] = round(status.get("high_outlier", 0) / n_priced, 4)
+    dq["city_median_price"] = silver.select(F.first("city_median_price")).first()[0] or 0.0
     return silver, dq
 
 
-def dq_frame(lh: Lakehouse, city: str, layer: str, dq: dict) -> DataFrame:
+def check_expectations(dq: dict) -> dict:
+    """metric -> 'pass' | 'warn' for every metric that has an expectation (config.DQ_EXPECTATIONS)."""
+    status = {}
+    for metric, (lo, hi) in config.DQ_EXPECTATIONS.items():
+        v = dq.get(metric)
+        if v is None:
+            continue
+        bad = (lo is not None and v < lo) or (hi is not None and v > hi)
+        status[metric] = "warn" if bad else "pass"
+        if bad:
+            print(f"[dq] WARNING {metric} = {v} outside expected range [{lo}, {hi}]")
+    return status
+
+
+def dq_frame(lh: Lakehouse, city: str, layer: str, dq: dict, checks: dict | None = None) -> DataFrame:
     import pandas as pd
+    checks = checks or {}
     rows = pd.DataFrame({"city": city, "layer": layer, "metric": list(dq.keys()),
-                         "value": [float(v) for v in dq.values()]})
+                         "value": [float(v) for v in dq.values()],
+                         "check_status": [checks.get(k, "info") for k in dq]})
     return lh.spark.createDataFrame(rows).withColumn("computed_at", F.current_timestamp())
 
 
@@ -160,6 +193,8 @@ def run_silver(lh: Lakehouse, city: str) -> dict:
     bronze = lh.read("bronze_listings").where(F.col("city") == city)
     silver, dq = build_silver(bronze)
     n = lh.write_city(silver, "silver_listings", city)
-    lh.write_city(dq_frame(lh, city, "silver", dq), "dq_metrics", city)
+    checks = check_expectations(dq)
+    lh.write_city(dq_frame(lh, city, "silver", dq, checks), "dq_metrics", city,
+                  merge_schema=True, extra={"layer": "silver"})
     print(f"[silver] {city}: {n:,} rows | " + ", ".join(f"{k}={v}" for k, v in dq.items()))
     return {"city": city, **dq}

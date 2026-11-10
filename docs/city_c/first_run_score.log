@@ -1,0 +1,9 @@
+                                                                                [score] {'city': 'amsterdam', 'version': 'v1', 'rows': 10612, 'eval_rows': 5927, 'mae_model': 158.6, 'mae_baseline': 195.54}
+EXIT CODE: 0
+                                                                                [report]
+model_version                city     city_role evaluation_set    n  mae_model  mae_baseline  median_abs_error_model  mape_model  mean_error_model  median_price  improvement_vs_baseline
+           v1           amsterdam      new_city   all listings 5927     158.60        195.54                  123.67      0.4430           -155.52         281.7                   0.1889
+           v1             antwerp training_city     test split  402      39.01         57.08                   22.19      0.2613             -3.73         127.0                   0.3166
+           v1            brussels training_city     test split  831      32.92         46.88                   20.49      0.2151             -7.17         128.0                   0.2978
+           v1 ALL TRAINING CITIES training_city     test split 1233      34.91         50.21                   21.00      0.2302             -6.05         127.6                   0.3047
+EXIT CODE: 0

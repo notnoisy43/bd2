@@ -1,0 +1,51 @@
+Setting default log level to "WARN".
+                                                                                [train] 4,801 training rows from ['brussels', 'antwerp'] (target: relative price)
+[train] 5-fold CV MAE on the training split (EUR):
+                mean   std
+model                     
+hgb_small      39.61  2.29
+hgb            39.65  2.42
+random_forest  40.06  2.01
+ridge          44.46  2.41
+baseline       51.66  1.42
+[train] saved hgb_small as D:/bd2/data/models/price_model_v2.joblib
+Setting default log level to "WARN".
+                                                                                [score] {'city': 'brussels', 'version': 'v2', 'rows': 4850, 'eval_rows': 831, 'mae_model': 33.74, 'mae_baseline': 46.88}
+[score] {'city': 'antwerp', 'version': 'v2', 'rows': 2463, 'eval_rows': 402, 'mae_model': 41.24, 'mae_baseline': 57.29}
+[score] WARNING amsterdam is not a training city of model v2
+[score] WARNING 100% of listings are in neighbourhoods the model never saw
+[score] WARNING median price is 2.219x the training price level
+[score] {'city': 'amsterdam', 'version': 'v2', 'rows': 10612, 'eval_rows': 6030, 'mae_model': 107.0, 'mae_baseline': 210.67}
+Setting default log level to "WARN".
+                                                                                [train] 9,671 training rows from ['brussels', 'antwerp', 'amsterdam'] (target: relative price)
+[train] 5-fold CV MAE on the training split (EUR):
+                 mean   std
+model                      
+hgb             60.93  2.20
+hgb_small       61.31  2.24
+random_forest   62.35  2.59
+ridge           68.65  2.85
+baseline       114.73  4.13
+[train] saved hgb as D:/bd2/data/models/price_model_v3.joblib
+Setting default log level to "WARN".
+                                                                                [score] {'city': 'brussels', 'version': 'v3', 'rows': 4850, 'eval_rows': 831, 'mae_model': 35.13, 'mae_baseline': 77.54}
+[score] {'city': 'antwerp', 'version': 'v3', 'rows': 2463, 'eval_rows': 402, 'mae_model': 40.8, 'mae_baseline': 92.57}
+[score] WARNING median price is 2.161x the training price level
+[score] {'city': 'amsterdam', 'version': 'v3', 'rows': 10612, 'eval_rows': 1160, 'mae_model': 82.89, 'mae_baseline': 145.96}
+Setting default log level to "WARN".
+                                                                                [report]
+model_version                city     city_role evaluation_set    n  mae_model  mae_baseline  median_abs_error_model  mape_model  mean_error_model  median_price  improvement_vs_baseline
+           v1           amsterdam      new_city   all listings 6030     171.21        210.70                  125.85      0.4473           -168.18        285.02                   0.1874
+           v1           amsterdam      new_city     test split 1160     171.82        210.59                  127.82      0.4480           -167.56        285.37                   0.1841
+           v1             antwerp training_city     test split  402      39.01         57.08                   22.19      0.2613             -3.73        127.00                   0.3166
+           v1            brussels training_city     test split  831      32.92         46.88                   20.49      0.2151             -7.17        128.00                   0.2978
+           v2           amsterdam      new_city   all listings 6030     107.00        210.67                   77.06      0.3861             27.22        285.02                   0.4921
+           v2           amsterdam      new_city     test split 1160     108.75        210.54                   79.31      0.4108             27.80        285.37                   0.4835
+           v2             antwerp training_city     test split  402      41.24         57.29                   23.43      0.2893              4.04        127.00                   0.2802
+           v2            brussels training_city     test split  831      33.74         46.88                   21.33      0.2168            -10.41        128.00                   0.2803
+           v3           amsterdam training_city     test split 1160      82.89        145.96                   52.38      0.2598            -14.35        285.37                   0.4321
+           v3             antwerp training_city     test split  402      40.80         92.57                   25.60      0.2848              4.52        127.00                   0.5593
+           v3            brussels training_city     test split  831      35.13         77.54                   20.34      0.2152            -17.78        128.00                   0.5469
+           v1 ALL TRAINING CITIES training_city     test split 1233      34.91         50.21                   21.00      0.2302             -6.05        127.60                   0.3047
+           v2 ALL TRAINING CITIES training_city     test split 1233      36.18         50.27                   21.78      0.2404             -5.70        127.60                   0.2803
+           v3 ALL TRAINING CITIES training_city     test split 2393      59.23        113.23                   34.42      0.2485            -12.37        180.50                   0.4769

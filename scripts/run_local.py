@@ -42,6 +42,7 @@ def main() -> None:
     ap.add_argument("--version", default="v1")
     ap.add_argument("--train-cities", nargs="+", default=config.TRAIN_CITIES)
     ap.add_argument("--snapshot", default="latest")
+    ap.add_argument("--absolute", action="store_true", help="train on absolute log(price) like v1")
     ap.add_argument("--root", default=os.path.join(ROOT, "data"))
     a = ap.parse_args()
 
@@ -50,7 +51,7 @@ def main() -> None:
         for c in a.cities:
             run_city_etl(lh, c, a.snapshot)
     if a.step in ("train", "all"):
-        run_train(lh, a.train_cities, a.version)
+        run_train(lh, a.train_cities, a.version, relative=not a.absolute)
     if a.step in ("score", "all"):
         for c in a.cities:
             run_score(lh, c, a.version)

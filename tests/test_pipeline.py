@@ -44,10 +44,11 @@ def test_metrics_table_eval_sets():
         "baseline_price": [100.0, 80.0, 100.0, 100.0]})
     p["error"] = p.predicted_price - p.price
     p["abs_error"] = p.error.abs()
-    m = metrics_table(p).set_index("city")
-    assert m.loc["a", "n"] == 1 and m.loc["a", "mae_model"] == 10      # train rows never evaluated
-    assert m.loc["c", "n"] == 2 and m.loc["c", "mae_model"] == 50      # new city: all rows
-    assert "ALL TRAINING CITIES" in m.index
+    m = metrics_table(p).set_index(["city", "evaluation_set"])
+    assert m.loc[("a", "test split"), "n"] == 1 and m.loc[("a", "test split"), "mae_model"] == 10  # train rows never evaluated
+    assert m.loc[("c", "all listings"), "n"] == 2 and m.loc[("c", "all listings"), "mae_model"] == 50  # new city: all rows
+    assert m.loc[("c", "test split"), "n"] == 1                                    # ...and its test split
+    assert ("ALL TRAINING CITIES", "test split") in m.index
 
 
 @pytest.fixture(scope="module")
@@ -81,3 +82,32 @@ def test_silver_parsing(spark):
     assert out.loc[1, "amenities_count"] in (0, 2) and pd.isna(out.loc[2, "amenities_count"])  # bad JSON -> NULL
     assert out.loc[2, "bathrooms"] == 0.5 and pd.isna(out.loc[2, "bedrooms"])      # half-bath; 25 bedrooms -> NULL
     assert out.loc[2, "accommodates"] == 2                                          # "2.0" -> 2
+
+
+def test_relative_model_scales_with_city_index():
+    from sklearn.dummy import DummyRegressor
+    from airbnb_lakehouse.model import RelativePriceModel
+    X = pd.DataFrame({"city": ["a", "a", "b", "b"], "f": [1, 2, 3, 4]})
+    y = pd.Series([100.0, 100.0, 200.0, 200.0])
+    m = RelativePriceModel(DummyRegressor(strategy="mean")).fit(X, y, {"a": 100.0, "b": 200.0})
+    # relative target is 1.0 everywhere -> prediction = the city's index, also for an unseen city
+    q = pd.DataFrame({"city": ["a", "c"], "f": [1, 1]})
+    np.testing.assert_allclose(m.predict(q, index={"c": 300.0}), [100.0, 300.0])
+    with pytest.raises(ValueError):
+        m.predict(pd.DataFrame({"city": ["z"], "f": [1]}))
+
+
+def test_relative_high_outlier_rule(spark):
+    from pyspark.sql import functions as F
+    from airbnb_lakehouse import config
+    from airbnb_lakehouse.silver import build_silver
+    prices = ["$100.00"] * 9 + [f"${100 * config.PRICE_HIGH_MULTIPLE + 1:.2f}"]
+    rows = pd.DataFrame({"id": [str(i) for i in range(10)], "price": prices, "room_type": "Private room",
+                         "accommodates": "2", "latitude": "52.3", "longitude": "4.9",
+                         "neighbourhood_cleansed": "X"})
+    bronze = (spark.createDataFrame(rows).withColumn("city", F.lit("t"))
+              .withColumn("snapshot_date", F.lit("2026-01-01").cast("date")))
+    silver, dq = build_silver(bronze)
+    st = silver.toPandas().set_index("id")["price_status"]
+    assert st.loc[9] == "high_outlier" and (st.drop(9) == "ok").all()
+    assert dq["city_median_price"] == 100.0

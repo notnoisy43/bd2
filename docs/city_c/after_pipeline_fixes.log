@@ -1,0 +1,18 @@
+[bronze] brussels 2026-09-20: 4,850 rows, 94 columns
+[silver] brussels: 4,850 rows | bronze_rows=4850, dropped_missing_id=0, dropped_duplicate_id=0, dropped_missing_core_fields=0, silver_rows=4850, optional_columns_missing=0, price_status_high_outlier=20, price_status_ok=4076, price_status_missing=754, price_missing_share=0.1555, availability_zero_share=0.1313, high_outlier_share_of_priced=0.0049, city_median_price=125.5
+[gold] brussels: {'gold_listing_features': 4850, 'gold_city_metrics': 1, 'gold_neighbourhood_metrics': 19, 'gold_room_type_metrics': 4}
+[bronze] D:/bd2/data/raw/antwerp/2026-09-23/listings.csv.gz already landed, skipping download
+[bronze] antwerp 2026-09-23: 2,463 rows, 94 columns
+[silver] antwerp: 2,463 rows | bronze_rows=2463, dropped_missing_id=0, dropped_duplicate_id=0, dropped_missing_core_fields=0, silver_rows=2463, optional_columns_missing=0, price_status_high_outlier=9, price_status_ok=1958, price_status_missing=496, price_missing_share=0.2014, availability_zero_share=0.123, high_outlier_share_of_priced=0.0046, city_median_price=131.0
+[gold] antwerp: {'gold_listing_features': 2463, 'gold_city_metrics': 1, 'gold_neighbourhood_metrics': 54, 'gold_room_type_metrics': 4}
+[bronze] D:/bd2/data/raw/amsterdam/2026-09-16/listings.csv.gz already landed, skipping download
+[bronze] amsterdam 2026-09-16: 10,612 rows, 94 columns
+[dq] WARNING price_missing_share = 0.4309 outside expected range [None, 0.3]
+[dq] WARNING availability_zero_share = 0.4203 outside expected range [None, 0.25]
+[silver] amsterdam: 10,612 rows | bronze_rows=10612, dropped_missing_id=0, dropped_duplicate_id=0, dropped_missing_core_fields=0, silver_rows=10612, optional_columns_missing=0, price_status_high_outlier=9, price_status_ok=6030, price_status_missing=4573, price_missing_share=0.4309, availability_zero_share=0.4203, high_outlier_share_of_priced=0.0015, city_median_price=285.25
+[gold] amsterdam: {'gold_listing_features': 10612, 'gold_city_metrics': 1, 'gold_neighbourhood_metrics': 22, 'gold_room_type_metrics': 4}
+[score] {'city': 'antwerp', 'version': 'v1', 'rows': 2463, 'eval_rows': 402, 'mae_model': 39.01, 'mae_baseline': 57.08}
+[score] WARNING amsterdam is not a training city of model v1
+[score] WARNING 100% of listings are in neighbourhoods the model never saw
+[score] WARNING median price is 2.253x the training price level
+[score] {'city': 'amsterdam', 'version': 'v1', 'rows': 10612, 'eval_rows': 6030, 'mae_model': 171.21, 'mae_baseline': 210.7}

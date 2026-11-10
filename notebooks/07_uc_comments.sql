@@ -57,3 +57,8 @@ COMMENT ON TABLE gold_model_metrics IS 'Model quality per model version and city
 ALTER TABLE gold_model_metrics ALTER COLUMN mae_model COMMENT 'Mean absolute error of the model, EUR.';
 ALTER TABLE gold_model_metrics ALTER COLUMN mae_baseline COMMENT 'Mean absolute error of the baseline, EUR.';
 ALTER TABLE gold_model_metrics ALTER COLUMN improvement_vs_baseline COMMENT 'Fraction 1 - mae_model / mae_baseline.';
+
+-- COMMAND ----------
+
+ALTER TABLE gold_predictions ALTER COLUMN model_version COMMENT 'v1 = week-1 model (Brussels+Antwerp, absolute price); v2 = relative-price model trained on Brussels+Antwerp; v3 = relative-price model retrained with Amsterdam. Production: v1 for brussels/antwerp, v3 for amsterdam.';
+COMMENT ON TABLE dq_metrics IS 'Data-quality and scoring-coverage metrics per city and layer (silver, score_<version>). check_status = warn marks a value outside the expectation derived from the Brussels/Antwerp EDA.';

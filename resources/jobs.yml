@@ -25,16 +25,21 @@ resources:
     lakehouse:
       name: airbnb_lakehouse
       parameters:
-        - { name: cities, default: '["brussels","antwerp"]' }   # JSON list, the for-each input
-        - { name: train_cities, default: "brussels,antwerp" }
+        - { name: cities, default: "brussels+antwerp" }          # '+'-separated (CLI --params splits on commas)
+        - { name: train_cities, default: "brussels+antwerp" }
         - { name: model_version, default: v1 }
         - { name: retrain, default: "true" }                    # "false" = score with an existing frozen version
+        - { name: target_mode, default: relative }              # relative (city-C fix M1) | absolute (= week-1 v1)
         - { name: catalog, default: "${var.catalog}" }
         - { name: schema, default: "${var.schema}" }
       tasks:
+        - task_key: plan
+          notebook_task: { notebook_path: ../notebooks/00_plan.py }
+
         - task_key: etl_each_city
+          depends_on: [ { task_key: plan } ]
           for_each_task:
-            inputs: "{{job.parameters.cities}}"
+            inputs: "{{tasks.plan.values.cities}}"
             concurrency: 2
             task:
               task_key: etl_city
@@ -60,7 +65,7 @@ resources:
           depends_on: [ { task_key: retrain_requested }, { task_key: train } ]
           run_if: NONE_FAILED          # runs after training, or straight away when training was skipped
           for_each_task:
-            inputs: "{{job.parameters.cities}}"
+            inputs: "{{tasks.plan.values.cities}}"
             concurrency: 2
             task:
               task_key: score_city

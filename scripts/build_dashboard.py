@@ -12,12 +12,12 @@ CAT = "workspace.airbnb_benelux"
 
 # Titles state findings (numbers from gold_* tables; refreshed after every run).
 TITLES = {
-    "overview": ("Brussels has twice Antwerp's listings, but prices are almost the same: median €125 vs €130",
-                 "Per-city supply, price, availability, reviews and hosts. Price figures exclude missing and outlier prices (`price_status = 'ok'`)."),
-    "compare": ("Antwerp is more 'professional' (84 % entire homes, 61 % multi-listing hosts); Brussels earns more per listing",
-                "Side-by-side metrics for every city. The difference that matters for pricing is the mix, not the price level."),
-    "model": ("The model beats the baseline by ~30 % in Brussels and Antwerp (MAE €35 vs €50), and under-prices the expensive tail",
-              "Honest evaluation: 20 % test split for training cities, every priced listing for a new city."),
+    "overview": ("Amsterdam costs 2.3x Belgium (median €285 vs €125-130), and 42 % of its calendars are closed",
+                 "Per-city supply, price, availability, reviews and hosts. Price figures exclude missing and outlier prices (`price_status = 'ok'`; ceiling = 8x city median)."),
+    "compare": ("Brussels and Antwerp price alike; what differs is the mix (Antwerp: 84 % entire homes, 61 % multi-listing hosts)",
+                "Side-by-side metrics for every city. Amsterdam is the outlier on every axis: price, availability, and hosts (19 % multi-listing)."),
+    "model": ("v1 beats the baseline by 30 % at home but under-priced Amsterdam by €168; the relative model retrained on Amsterdam (v3) cuts its MAE from €172 to €83",
+              "Honest evaluation: 20 % test split for training cities, every priced listing (and the test split) for a new city. v1 = frozen week-1 model, v2 = relative price (A+B only), v3 = relative price retrained with Amsterdam."),
 }
 
 DATASETS = {
@@ -47,11 +47,18 @@ GROUP BY city, LEAST(FLOOR(price / 25) * 25, 500)""",
        ROUND(mape_model * 100, 1) AS mape_pct, mean_error_model, median_price
 FROM {CAT}.gold_model_metrics
 ORDER BY model_version, city_role DESC, city""",
-    "ds_eval": f"""SELECT model_version, city, city_role, listing_id, name, room_type, neighbourhood, accommodates,
+    "ds_metrics_test": f"""SELECT model_version, city, mae_model, mae_baseline
+FROM {CAT}.gold_model_metrics
+WHERE evaluation_set = 'test split' AND city <> 'ALL TRAINING CITIES'""",
+    "ds_dq": f"""SELECT city, layer, metric, ROUND(value, 3) AS value, check_status
+FROM {CAT}.dq_metrics
+WHERE check_status = 'warn'
+ORDER BY city, layer, metric""",
+    "ds_eval": f"""SELECT model_version, city, concat(city, ' · ', model_version) AS series, city_role, listing_id, name, room_type, neighbourhood, accommodates,
        price, predicted_price, baseline_price, error, abs_error, baseline_abs_error, listing_url
 FROM {CAT}.gold_predictions
 WHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')""",
-    "ds_err_room": f"""SELECT model_version, city, room_type, COUNT(*) AS n,
+    "ds_err_room": f"""SELECT model_version, city, concat(city, ' · ', model_version) AS series, room_type, COUNT(*) AS n,
        ROUND(AVG(abs_error), 1) AS mae_model, ROUND(AVG(baseline_abs_error), 1) AS mae_baseline
 FROM {CAT}.gold_predictions
 WHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')
@@ -59,7 +66,7 @@ GROUP BY model_version, city, room_type
 HAVING COUNT(*) >= 5""",
     "ds_err_nbhd": f"""SELECT model_version, city, neighbourhood, COUNT(*) AS n,
        ROUND(AVG(error), 1) AS mean_error, ROUND(AVG(abs_error), 1) AS mae_model,
-       concat(city, ' · ', neighbourhood) AS city_neighbourhood
+       concat(city, ' · ', neighbourhood) AS city_neighbourhood, concat(city, ' · ', model_version) AS series
 FROM {CAT}.gold_predictions
 WHERE price_status = 'ok' AND (city_role = 'new_city' OR split = 'test')
 GROUP BY model_version, city, neighbourhood
@@ -193,11 +200,15 @@ def build():
         table("ds_metrics", ["model_version", "city", "city_role", "evaluation_set", "n", "mae_baseline", "mae_model",
                              "improvement_pct", "median_abs_error_model", "mape_pct", "mean_error_model", "median_price"],
               "MAE (EUR): model vs baseline", (0, 2, 6, 4)),
-        scatter("ds_eval", "price", "predicted_price", "city", "Predicted vs actual price (EUR)", (0, 6, 3, 8),
+        bar("ds_metrics_test", "model_version", "mae_model", "Test-split MAE by model version and city (EUR)", (0, 33, 3, 6),
+            color="city", desc="Amsterdam: v1 172, v2 109, v3 83. C-local baseline: 111."),
+        table("ds_dq", ["city", "layer", "metric", "value", "check_status"],
+              "Pipeline warnings (data-quality and scoring-coverage checks added after the first city-C run)", (3, 33, 3, 6)),
+        scatter("ds_eval", "price", "predicted_price", "series", "Predicted vs actual price (EUR)", (0, 6, 3, 8),
                 desc="Points below the diagonal are under-priced by the model."),
-        bar("ds_err_room", "room_type", "mae_model", "Model MAE by room type (EUR)", (3, 6, 3, 8), color="city"),
+        bar("ds_err_room", "room_type", "mae_model", "Model MAE by room type (EUR)", (3, 6, 3, 8), color="series"),
         bar("ds_err_nbhd", "city_neighbourhood", "mean_error", "Mean error by neighbourhood (EUR, < 0 = under-priced)",
-            (0, 14, 6, 10), color="city", horizontal=True, xlabel="neighbourhood", ylabel="mean error (EUR)"),
+            (0, 14, 6, 10), color="series", horizontal=True, xlabel="neighbourhood", ylabel="mean error (EUR)"),
         table("ds_extremes", ["model_version", "city", "direction", "rnk", "name", "room_type", "neighbourhood",
                               "accommodates", "price", "predicted_price", "error", "listing_url"],
               "Listings the model under- / over-prices most (top 10 each)", (0, 24, 6, 9)),
@@ -215,7 +226,7 @@ def validate():
              .config("spark.sql.execution.arrow.pyspark.enabled", "true").getOrCreate())
     spark.sparkContext.setLogLevel("ERROR")
     for tname in ["gold_city_metrics", "gold_room_type_metrics", "gold_neighbourhood_metrics",
-                  "gold_model_metrics", "gold_predictions", "silver_listings"]:
+                  "gold_model_metrics", "gold_predictions", "silver_listings", "dq_metrics"]:
         pdf = rd(tname)
         if "amenities" in pdf:
             pdf = pdf.drop(columns=["amenities"])

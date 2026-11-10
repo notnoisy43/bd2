@@ -25,16 +25,18 @@ feats = prepare(rd("gold_listing_features"))
 feats = feats[feats.city.isin(bundle["train_cities"])]
 test = feats[(feats.split == "test") & (feats.price_status == "ok")]
 metrics = rd("gold_model_metrics")
-metrics = metrics[metrics.model_version == a.version]
+metrics = metrics[(metrics.model_version == a.version) & (metrics.city_role == "training_city")]
 preds = rd("gold_predictions")
 preds = preds[(preds.model_version == a.version) & preds.city.isin(bundle["train_cities"])
               & (preds.split == "test") & (preds.price_status == "ok")]
 
 mae = lambda y, p: float(np.mean(np.abs(y - p)))  # noqa: E731
+relative = bundle.get("target") == "relative"
 pi = permutation_importance(bundle["model"], test[bundle["features"]], test["price"],
                             scoring=lambda est, X, y: -mae(y, est.predict(X)),
                             n_repeats=5, random_state=0)
 imp = (pd.DataFrame({"feature": bundle["features"], "MAE increase (EUR)": pi.importances_mean})
+       .query("not (feature == 'city' and @relative)")
        .sort_values("MAE increase (EUR)", ascending=False).round(2))
 
 by_rt = (preds.groupby(["city", "room_type"])
@@ -47,11 +49,12 @@ by_band = (preds.assign(price_band=pd.cut(preds.price, [0, 75, 125, 200, 400, 10
 cv = pd.DataFrame(bundle["cv"]).round(2)
 md = f"""# Price model {a.version}
 
-* **Model**: `{bundle['model_name']}` (scikit-learn HistGradientBoostingRegressor on log(price), exp back), chosen by
+* **Model**: `{bundle['model_name']}` (scikit-learn HistGradientBoostingRegressor on {'log(price / city price index)' if relative else 'log(price)'}, exp back), chosen by
   5-fold CV on the training split; the test split was not used for any choice.
 * **Trained on**: {', '.join(bundle['train_cities'])}: {bundle['n_train']:,} listings (`split='train'`, `price_status='ok'`), trained at {bundle['trained_at'][:19]} UTC.
 * **Baseline**: median training price for the same (room_type, accommodates), falling back to the room-type median and then the global median.
-* **Price bounds**: training and primary evaluation use €{bundle['price_bounds'][0]:.0f} to €{bundle['price_bounds'][1]:.0f}.
+* **Price rule**: {bundle.get('price_rule') or f"{bundle['price_bounds'][0]:.0f} <= price <= {bundle['price_bounds'][1]:.0f} EUR"} (training and primary evaluation).
+* **City price index** (median training-split price): {bundle.get('city_index') or 'n/a (absolute model)'}
 
 ## Model choice: 5-fold CV MAE on the training split (EUR)
 
