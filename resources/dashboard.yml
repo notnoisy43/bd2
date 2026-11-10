@@ -1,0 +1,6 @@
+resources:
+  dashboards:
+    airbnb_benelux:
+      display_name: "Benelux Airbnb: cities and price model"
+      file_path: ../dashboards/airbnb_benelux.lvdash.json
+      warehouse_id: ${var.warehouse_id}
