@@ -1,0 +1,73 @@
+# One parameterised city pipeline + one orchestrator.  Adding a city = adding it to the `cities` parameter.
+resources:
+  jobs:
+
+    # bronze -> silver -> gold for ONE city. Can be run on its own: --params city=antwerp
+    city_etl:
+      name: airbnb_city_etl
+      max_concurrent_runs: 4
+      parameters:
+        - { name: city, default: brussels }
+        - { name: snapshot_date, default: latest }
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: schema, default: "${var.schema}" }
+      tasks:
+        - task_key: bronze
+          notebook_task: { notebook_path: ../notebooks/01_bronze_ingest.py }
+        - task_key: silver
+          depends_on: [ { task_key: bronze } ]
+          notebook_task: { notebook_path: ../notebooks/02_silver_clean.py }
+        - task_key: gold
+          depends_on: [ { task_key: silver } ]
+          notebook_task: { notebook_path: ../notebooks/03_gold_city.py }
+
+    # ETL for every city (in parallel) -> (optionally) train -> score every city -> metrics
+    lakehouse:
+      name: airbnb_lakehouse
+      parameters:
+        - { name: cities, default: '["brussels","antwerp"]' }   # JSON list, the for-each input
+        - { name: train_cities, default: "brussels,antwerp" }
+        - { name: model_version, default: v1 }
+        - { name: retrain, default: "true" }                    # "false" = score with an existing frozen version
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: schema, default: "${var.schema}" }
+      tasks:
+        - task_key: etl_each_city
+          for_each_task:
+            inputs: "{{job.parameters.cities}}"
+            concurrency: 2
+            task:
+              task_key: etl_city
+              run_job_task:
+                job_id: ${resources.jobs.city_etl.id}
+                job_parameters:
+                  city: "{{input}}"
+                  catalog: "{{job.parameters.catalog}}"
+                  schema: "{{job.parameters.schema}}"
+
+        - task_key: retrain_requested
+          depends_on: [ { task_key: etl_each_city } ]
+          condition_task:
+            op: EQUAL_TO
+            left: "{{job.parameters.retrain}}"
+            right: "true"
+
+        - task_key: train
+          depends_on: [ { task_key: retrain_requested, outcome: "true" } ]
+          notebook_task: { notebook_path: ../notebooks/04_train_model.py }
+
+        - task_key: score_each_city
+          depends_on: [ { task_key: retrain_requested }, { task_key: train } ]
+          run_if: NONE_FAILED          # runs after training, or straight away when training was skipped
+          for_each_task:
+            inputs: "{{job.parameters.cities}}"
+            concurrency: 2
+            task:
+              task_key: score_city
+              notebook_task:
+                notebook_path: ../notebooks/05_score_city.py
+                base_parameters: { city: "{{input}}" }
+
+        - task_key: report
+          depends_on: [ { task_key: score_each_city } ]
+          notebook_task: { notebook_path: ../notebooks/06_model_report.py }

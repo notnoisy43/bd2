@@ -1,0 +1,23 @@
+# Databricks Asset Bundle: deploy with `databricks bundle deploy`, run with `databricks bundle run lakehouse`.
+bundle:
+  name: airbnb_benelux
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog (Free Edition default is `workspace`)
+    default: workspace
+  schema:
+    description: Schema holding all bronze/silver/gold tables and the raw/models volumes
+    default: airbnb_benelux
+  warehouse_id:
+    description: SQL warehouse for the AI/BI dashboard
+    lookup:
+      warehouse: "Serverless Starter Warehouse"
+
+targets:
+  dev:
+    mode: development
+    default: true
