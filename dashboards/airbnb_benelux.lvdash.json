@@ -96,9 +96,9 @@
             "name": "text_1",
             "multilineTextboxSpec": {
               "lines": [
-                "## Amsterdam costs 2.3x Belgium (median €285 vs €125-130), and 42 % of its calendars are closed",
-                "",
-                "Per-city supply, price, availability, reviews and hosts. Price figures exclude missing and outlier prices (`price_status = 'ok'`; ceiling = 8x city median)."
+                "## Amsterdam costs 2.3x Belgium (median €285 vs €125-130), and 42 % of its calendars are closed\n",
+                "\n",
+                "Per-city supply, price, availability, reviews and hosts. Price figures exclude missing and outlier prices (`price_status = 'ok'`; ceiling = 8x city median).\n"
               ]
             }
           },
@@ -776,9 +776,9 @@
             "name": "text_9",
             "multilineTextboxSpec": {
               "lines": [
-                "## Brussels and Antwerp price alike; what differs is the mix (Antwerp: 84 % entire homes, 61 % multi-listing hosts)",
-                "",
-                "Side-by-side metrics for every city. Amsterdam is the outlier on every axis: price, availability, and hosts (19 % multi-listing)."
+                "## Brussels and Antwerp price alike; what differs is the mix (Antwerp: 84 % entire homes, 61 % multi-listing hosts)\n",
+                "\n",
+                "Side-by-side metrics for every city. Amsterdam is the outlier on every axis: price, availability, and hosts (19 % multi-listing).\n"
               ]
             }
           },
@@ -1064,9 +1064,9 @@
             "name": "text_14",
             "multilineTextboxSpec": {
               "lines": [
-                "## v1 beats the baseline by 30 % at home but under-priced Amsterdam by €168; the relative model retrained on Amsterdam (v3) cuts its MAE from €172 to €83",
-                "",
-                "Honest evaluation: 20 % test split for training cities, every priced listing (and the test split) for a new city. v1 = frozen week-1 model, v2 = relative price (A+B only), v3 = relative price retrained with Amsterdam."
+                "## v1 beats the baseline by 30 % at home but under-priced Amsterdam by €168; the relative model retrained on Amsterdam (v3) cuts its MAE from €172 to €83\n",
+                "\n",
+                "Honest evaluation: 20 % test split for training cities, every priced listing (and the test split) for a new city. v1 = frozen week-1 model, v2 = relative price (A+B only), v3 = relative price retrained with Amsterdam.\n"
               ]
             }
           },

@@ -105,7 +105,7 @@ def frame(title, desc=None):
 
 
 def text(lines, x, y, w, h):
-    return {"widget": {"name": _name("text"), "multilineTextboxSpec": {"lines": lines}},
+    return {"widget": {"name": _name("text"), "multilineTextboxSpec": {"lines": [l + "\n" for l in lines]}},
             "position": {"x": x, "y": y, "width": w, "height": h}}
 
 
