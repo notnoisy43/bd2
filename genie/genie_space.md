@@ -121,7 +121,22 @@ ORDER BY listings DESC;
 
 ## 5. Configuration tricks and why we used them
 
-*(Check them against the live space during the demo; the expected answers in section 3 come from the local run of the same pipeline.)*
+The space is created from this file by `python scripts/build_genie_space.py --create` (it writes `genie/genie_space.json`
+and posts it to the Genie API), so the configuration is versioned with the code.
+
+**What we observed in the live space (12 Nov 2026, Databricks run):**
+
+* All three assignment questions were answered correctly on the first try: €138 (Brussels, 3,509 entire homes);
+  Historisch Centrum 397, Amandus - Atheneum 219, Theaterbuurt-Meir 194; Oud-Oost, Amsterdam, v3, −€47. In each case Genie
+  reused the trusted example SQL verbatim, which is what trick 5 is for.
+* "What is the typical price in City C?" (no example SQL): Genie mapped *City C* to `'amsterdam'` and *typical* to the
+  precomputed `median_price` (€285) instead of an `AVG` over listings. Tricks 1 and 2 at work.
+* "Show the 10 listings in Antwerp the model over-prices most" (no example SQL): Genie picked model v1, applied the
+  honest-rows filter and used `error > 0` for *over-prices*. Tricks 2 and 3 at work.
+* "How much worse is the model in Amsterdam than in Brussels and Antwerp?": Genie compared all three cities under v3
+  (€84 vs €37 / €39) instead of the production pairing (v3 for Amsterdam, v1 for A/B: €84 vs €32 / €39). That is a
+  defensible like-for-like reading, and Genie said which version it used, as the style instruction asks. We left it as it is.
+
 
 1. **Pre-aggregated gold tables** for medians. Genie writes `AVG` when asked for "typical" price and has no reliable `MEDIAN`
    habit, so the medians are precomputed with the same outlier rule as the dashboard. Answers then match the dashboard exactly.

@@ -1,0 +1,190 @@
+{
+ "version": 2,
+ "config": {
+  "sample_questions": [
+   {
+    "id": "22a9cf7546224d9b9dc8b235e291b5c6",
+    "question": [
+     "What is the median price of entire homes in City A?"
+    ]
+   },
+   {
+    "id": "3c7595c7cca345969a7e488f3611223d",
+    "question": [
+     "Which neighbourhoods in City B have the most listings?"
+    ]
+   },
+   {
+    "id": "4ad6b949c1a44cc386fb93d762502510",
+    "question": [
+     "Where does the model under-price listings the most?"
+    ]
+   },
+   {
+    "id": "4dd19a30edd44b6c8b36f75abf9e6bfb",
+    "question": [
+     "How much better than the baseline is the model in each city?"
+    ]
+   },
+   {
+    "id": "8d0e2a683d6a485884b14de58b29e5d3",
+    "question": [
+     "Which city has the highest share of multi-listing hosts?"
+    ]
+   },
+   {
+    "id": "ab05b76ff273446bada1f6c98e2c150b",
+    "question": [
+     "Show the 10 listings in Antwerp the model over-prices most."
+    ]
+   },
+   {
+    "id": "ab9448504cd74453960e71f62fba9cdb",
+    "question": [
+     "What is the median price of entire homes in City C, and how does it compare with City A?"
+    ]
+   },
+   {
+    "id": "bbf2d4a4ab7f4d8da030f62038da4e2c",
+    "question": [
+     "How much worse is the model in Amsterdam than in Brussels and Antwerp?"
+    ]
+   }
+  ]
+ },
+ "data_sources": {
+  "tables": [
+   {
+    "identifier": "workspace.airbnb_benelux.gold_city_metrics"
+   },
+   {
+    "identifier": "workspace.airbnb_benelux.gold_model_metrics"
+   },
+   {
+    "identifier": "workspace.airbnb_benelux.gold_neighbourhood_metrics"
+   },
+   {
+    "identifier": "workspace.airbnb_benelux.gold_predictions"
+   },
+   {
+    "identifier": "workspace.airbnb_benelux.gold_room_type_metrics"
+   }
+  ]
+ },
+ "instructions": {
+  "text_instructions": [
+   {
+    "id": "0968016e9e944834a61554c362475445",
+    "content": [
+     "You answer questions about Airbnb listings in the Benelux region for a short-term-rental analytics company.\n",
+     "\n",
+     "Cities\n",
+     "- \"City A\" means Brussels, \"City B\" means Antwerp, \"City C\" (the new client) means Amsterdam.\n",
+     "- The column city holds lowercase slugs: 'brussels', 'antwerp', 'amsterdam'. Always filter with lowercase.\n",
+     "\n",
+     "Prices\n",
+     "- All prices are per night in EUR. Never convert currencies.\n",
+     "- \"Median price\" questions: use the precomputed median_price columns of gold_city_metrics,\n",
+     "  gold_room_type_metrics or gold_neighbourhood_metrics. They exclude missing prices and outliers\n",
+     "  (below 15 EUR or above 1000 EUR). Do not recompute medians from gold_predictions unless the question is about the model.\n",
+     "- \"Entire home(s)\" / \"whole apartment\" = room_type 'Entire home/apt'. \"Private room\" = 'Private room'.\n",
+     "\n",
+     "Model\n",
+     "- gold_predictions.error = predicted_price - price. error < 0 means the model UNDER-prices the listing\n",
+     "  (predicts less than the real price); error > 0 means it OVER-prices it.\n",
+     "- Evaluate the model only on honest rows: price_status = 'ok' AND (split = 'test' OR city_role = 'new_city').\n",
+     "  Training-split rows of Brussels/Antwerp were seen during training and must not be used for error statistics.\n",
+     "- Model versions: v1 = week-1 model (Brussels + Antwerp), v2 = relative-price model trained on Brussels + Antwerp only,\n",
+     "  v3 = relative-price model retrained with Amsterdam. If the question does not name a version, use the PRODUCTION model:\n",
+     "  v1 for brussels and antwerp, v3 for amsterdam:\n",
+     "  ((city IN ('brussels','antwerp') AND model_version = 'v1') OR (city = 'amsterdam' AND model_version = 'v3')).\n",
+     "  Say which version you used.\n",
+     "- MAE = mean absolute error = AVG(abs_error). The baseline is the median price for the same room type and number of guests (baseline_price).\n",
+     "- For \"where\" questions about the model, group by city and neighbourhood and require at least 15 listings.\n",
+     "\n",
+     "Style\n",
+     "- Round euros to whole numbers, percentages to one decimal. Mention the city and, for model questions, the model version."
+    ]
+   }
+  ],
+  "example_question_sqls": [
+   {
+    "id": "43ba29aa43bd4293a239ae4ae1c35d13",
+    "question": [
+     "What is the median price of entire homes in City A?"
+    ],
+    "sql": [
+     "SELECT city, room_type, listings, median_price\n",
+     "FROM workspace.airbnb_benelux.gold_room_type_metrics\n",
+     "WHERE city = 'brussels' AND room_type = 'Entire home/apt';"
+    ]
+   },
+   {
+    "id": "50e9baf05a744fd6a802328d46d56c20",
+    "question": [
+     "Which neighbourhoods in City B have the most listings?"
+    ],
+    "sql": [
+     "SELECT neighbourhood, listings, median_price\n",
+     "FROM workspace.airbnb_benelux.gold_neighbourhood_metrics\n",
+     "WHERE city = 'antwerp'\n",
+     "ORDER BY listings DESC\n",
+     "LIMIT 10;"
+    ]
+   },
+   {
+    "id": "5b92cc6294014903afc62027497b78db",
+    "question": [
+     "Where does the model under-price listings the most?"
+    ],
+    "sql": [
+     "SELECT model_version, city, neighbourhood, COUNT(*) AS listings,\n",
+     "       ROUND(AVG(error), 1) AS mean_error_eur, ROUND(AVG(abs_error), 1) AS mae_eur\n",
+     "FROM workspace.airbnb_benelux.gold_predictions\n",
+     "WHERE price_status = 'ok' AND (split = 'test' OR city_role = 'new_city')\n",
+     "  AND ((city IN ('brussels', 'antwerp') AND model_version = 'v1') OR (city = 'amsterdam' AND model_version = 'v3'))\n",
+     "GROUP BY model_version, city, neighbourhood\n",
+     "HAVING COUNT(*) >= 15\n",
+     "ORDER BY mean_error_eur ASC\n",
+     "LIMIT 10;"
+    ]
+   },
+   {
+    "id": "5dd7040c378842ec8bbf5fd2d3e90c88",
+    "question": [
+     "How much better is the model than the baseline?"
+    ],
+    "sql": [
+     "SELECT model_version, city, evaluation_set, n, mae_baseline, mae_model,\n",
+     "       ROUND(improvement_vs_baseline * 100, 1) AS improvement_pct\n",
+     "FROM workspace.airbnb_benelux.gold_model_metrics\n",
+     "ORDER BY model_version, city;"
+    ]
+   },
+   {
+    "id": "ae9c26e389d944178cdbbc963ad82252",
+    "question": [
+     "How did the model do on the new city?"
+    ],
+    "sql": [
+     "SELECT model_version, city, evaluation_set, n, mae_model, mae_baseline\n",
+     "FROM workspace.airbnb_benelux.gold_model_metrics\n",
+     "WHERE city = 'amsterdam'\n",
+     "ORDER BY evaluation_set, model_version;"
+    ]
+   },
+   {
+    "id": "c995b952618c4d2d8e6ddd75d426716c",
+    "question": [
+     "Compare the cities"
+    ],
+    "sql": [
+     "SELECT city, listings, hosts, median_price, avg_availability_365, avg_review_rating,\n",
+     "       share_entire_home, share_multi_listing_host\n",
+     "FROM workspace.airbnb_benelux.gold_city_metrics\n",
+     "ORDER BY listings DESC;"
+    ]
+   }
+  ]
+ }
+}
