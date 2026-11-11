@@ -62,8 +62,8 @@ resources:
           notebook_task: { notebook_path: ../notebooks/04_train_model.py }
 
         - task_key: score_each_city
-          depends_on: [ { task_key: retrain_requested }, { task_key: train } ]
-          run_if: NONE_FAILED          # runs after training, or straight away when training was skipped
+          depends_on: [ { task_key: retrain_requested, outcome: "false" }, { task_key: train } ]
+          run_if: NONE_FAILED          # runs after training, or straight away when training was skipped (retrain=false)
           for_each_task:
             inputs: "{{tasks.plan.values.cities}}"
             concurrency: 2

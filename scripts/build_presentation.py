@@ -137,7 +137,7 @@ S(f"""<section class="title"><div>
 <p class="kicker">Group assignment 2 · Big Data · Region 12: Benelux (EUR)</p>
 <h1>The third city is where you find out<br>whether you built a pipeline or a prototype</h1>
 <p class="sub">A Databricks lakehouse and price model for Brussels (A) and Antwerp (B), then run unchanged on the new client Amsterdam (C)</p>
-<p class="team">Team: <i>names</i></p></div></section>""")
+<p class="team">Team BoberRMDT: Matvii Shumylovych, Dmytro Hrebenyuk</p></div></section>""")
 
 S("""<section><h2>The task, and what we built</h2>
 <div class="cols"><div>
@@ -256,7 +256,7 @@ S("""<section><h2>Challenges, and who did what</h2>
 <li><b>Free Edition constraints</b>: serverless only, ANSI SQL (hence try_cast everywhere), no cluster libraries (%pip per notebook)</li>
 <li><b>Silent success</b> is harder to catch than a crash: a stack trace would have been easier to deal with than a confident wrong table</li></ul></div>
 <div><table><tr><th>member</th><th>contribution</th></tr>
-<tr><td><i>name</i></td><td><i>fill in</i></td></tr><tr><td><i>name</i></td><td><i>fill in</i></td></tr><tr><td><i>name</i></td><td><i>fill in</i></td></tr></table></div></div></section>""")
+<tr><td>Matvii Shumylovych</td><td>EDA and leak review, medallion pipeline, Databricks bundle and jobs, Amsterdam first run, pipeline fixes P1-P6, Genie</td></tr><tr><td>Dmytro Hrebenyuk</td><td>Price model v1 and model cards, model changes M1-M3 (v2, v3), city C report, AI/BI dashboard, presentation</td></tr></table></div></div></section>""")
 
 CSS = """
 @page { size: 1280px 720px; margin: 0 }

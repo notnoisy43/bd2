@@ -115,11 +115,13 @@ Relative error: v1 on A+B 23 %, v1 on Amsterdam 45 %, v3 on Amsterdam 26 %. What
 
 ## Team contributions
 
+Team **BoberRMDT**. Work was split equally between the two members.
+
+
 | member | contribution |
 |---|---|
-| _name_ | _fill in_ |
-| _name_ | _fill in_ |
-| _name_ | _fill in_ |
+| Matvii Shumylovych | EDA and leak review; medallion pipeline (bronze / silver / gold, city as a parameter); Databricks bundle and jobs; first run on Amsterdam and pipeline fixes P1-P6 (data-quality checks, scoring coverage); Genie space and UC comments |
+| Dmytro Hrebenyuk | Price model v1 and model cards; diagnosis of the Amsterdam gap and model changes M1-M3 (v2 relative price, v3 retrain); city C report; AI/BI dashboard; presentation |
 
 ## Data
 

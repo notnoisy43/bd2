@@ -69,9 +69,9 @@ ORDER BY listings DESC
 LIMIT 10;
 ```
 
-**Where does the model under-price listings the most?**  Expected (production models, honest rows): Centrum-Oost, Amsterdam
-(v3, mean error −€49, 132 listings), then Oud-Oost and Zuid. Restricted to cities A and B (v1): Saint-Gilles, Brussels (−€12, 79 listings),
-then Forest and Bruxelles.
+**Where does the model under-price listings the most?**  Expected (production models, honest rows, Databricks run): Oud-Oost, Amsterdam
+(v3, mean error −€47, 67 listings), then Centrum-Oost (−€38, 132) and Slotervaart. (The local run with scikit-learn 1.8 put Centrum-Oost first; the two are close.) Restricted to cities A and B (v1): Saint-Gilles, Brussels (−€12, 79 listings),
+then Historisch Centrum, Antwerp (−€9) and Forest, Brussels (−€9).
 ```sql
 SELECT model_version, city, neighbourhood, COUNT(*) AS listings,
        ROUND(AVG(error), 1) AS mean_error_eur, ROUND(AVG(abs_error), 1) AS mae_eur
