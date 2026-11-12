@@ -36,15 +36,6 @@ metrics = rd("gold_model_metrics")
 city_m = rd("gold_city_metrics").set_index("city")
 ok = silver[silver.price_status == "ok"]
 
-# --- fig: price distributions (A, B) -------------------------------------------------------
-fig, ax = plt.subplots(figsize=(6, 2.6))
-for c in ["brussels", "antwerp"]:
-    p = ok.loc[ok.city == c, "price"]
-    ax.hist(np.log10(p), bins=50, alpha=.55, color=COL[c], label=f"{c.title()}  (median €{p.median():.0f})")
-ax.set_xticks(np.log10([25, 50, 100, 200, 400, 1000])); ax.set_xticklabels(["25", "50", "100", "200", "400", "1000"])
-ax.set_xlabel("price per night, EUR (log scale)"); ax.set_yticks([]); ax.legend(frameon=False)
-f_price = img(fig)
-
 # --- fig: missingness pattern ----------------------------------------------------------------
 fig, ax = plt.subplots(figsize=(5.4, 3.0))
 rows = []
@@ -106,157 +97,134 @@ ax.set_xticks(range(len(bars))); ax.set_xticklabels([b[0] for b in bars], fontsi
 ax.set_ylabel("MAE, EUR (test split)"); ax.set_ylim(0, 235)
 f_gap = img(fig)
 
-# --- fig: Amsterdam structure differences -------------------------------------------------------
-fig, axs = plt.subplots(1, 2, figsize=(10, 3.2))
-pp = ok.assign(ppg=ok.price / ok.accommodates)
-for c in ["brussels", "antwerp", "amsterdam"]:
-    d = pp[pp.city == c]
-    g = d.groupby(d.accommodates.clip(upper=8)).price.median()
-    axs[0].plot(g.index, g.values, marker="o", color=COL[c], label=c.title())
-    med = d.price.median()
-    band = pd.cut(d.latitude * 0, [-1, 1])  # placeholder to keep pandas quiet
-feats = rd("gold_listing_features")
-fo = feats[feats.price_status == "ok"]
-for c in ["brussels", "antwerp", "amsterdam"]:
-    d = fo[fo.city == c]
-    rel = d.price / d.price.median()
-    g = rel.groupby(pd.cut(d.dist_centre_km, [0, 1, 2, 3, 5, 20]), observed=True).median()
-    axs[1].plot(range(len(g)), g.values, marker="o", color=COL[c], label=c.title())
-axs[0].set_xlabel("guests (8 = 8+)"); axs[0].set_ylabel("median price, EUR"); axs[0].legend(frameon=False)
-axs[0].set_title("price level", fontsize=11)
-axs[1].set_xticks(range(5)); axs[1].set_xticklabels(["<1", "1-2", "2-3", "3-5", "5+"]); axs[1].set_xlabel("km from centre")
-axs[1].set_ylabel("price / city median"); axs[1].set_title("price structure: distance gradient", fontsize=11)
-axs[1].axhline(1, color="#999", lw=.6)
-f_struct = img(fig)
 
-cm = city_m
+# ================================================================================================
+# 7-minute deck: one slide per evaluation criterion. Timings and spoken text: docs/presentation_script.md
+# ================================================================================================
 SLIDES = []
 S = SLIDES.append
 
-S(f"""<section class="title"><div>
-<p class="kicker">Group assignment 2 · Big Data · Region 12: Benelux (EUR)</p>
-<h1>The third city is where you find out<br>whether you built a pipeline or a prototype</h1>
-<p class="sub">A Databricks lakehouse and price model for Brussels (A) and Antwerp (B), then run unchanged on the new client Amsterdam (C)</p>
-<p class="team">Team BoberRMDT: Matvii Shumylovych, Dmytro Hrebenyuk</p></div></section>""")
 
-S("""<section><h2>The task, and what we built</h2>
-<div class="cols"><div>
-<ul>
-<li><b>Client cities A and B</b>: Brussels (snapshot 2026-09-20, 4,850 listings) and Antwerp (2026-09-23, 2,463)</li>
-<li><b>New client C</b>: Amsterdam (2026-09-16, 10,612). Not downloaded until the A/B pipeline and model were frozen (git tag <code>week1-final</code>)</li>
-<li>Why Amsterdam: the largest and most expensive Benelux market, another country, another neighbourhood system. The hardest realistic transfer</li>
-</ul></div><div>
-<ul>
-<li><b>Lakehouse</b>: bronze, silver and gold Delta tables in Unity Catalog, on Free Edition serverless (€0)</li>
-<li><b>One pipeline, city as the only parameter</b>: a Databricks job for one city plus an orchestrator with for-each</li>
-<li><b>Price model</b>: gradient boosting on log(price), against the required baseline</li>
-<li><b>AI/BI dashboard</b> (3 pages) and a <b>Genie space</b> over the gold tables</li>
-<li><b>City C report</b>: first run, every fix classified, the gap explained</li>
-</ul></div></div></section>""")
+def kick(n: int, label: str) -> str:
+    """Opens a slide: <section> plus the evaluation criterion it covers."""
+    return f'<section><p class="crit"><span>{n}/9</span>{label}</p>'
 
-S(f"""<section><h2>What the data told us: price is missing for a reason, and four columns are the price</h2>
-<div class="cols"><div><img src="{f_missing}"><p class="cap">Price is missing <b>not at random</b>: it is missing for listings with no bookable night (no quote).
-We exclude those rows from training (they are kept in silver for supply metrics) instead of inventing a price.</p></div>
-<div><table><tr><th>column</th><th>relation to price</th><th>verdict</th></tr>
-<tr><td>price_quote_price_per_night</td><td>= price (99.96 %/100 %)</td><td class="bad">leak</td></tr>
-<tr><td>price_quote_total_price</td><td>= price x nights</td><td class="bad">leak</td></tr>
-<tr><td>price_quote_raw</td><td>JSON containing the price</td><td class="bad">leak</td></tr>
-<tr><td>estimated_revenue_l365d</td><td>= price x occupancy (100 %)</td><td class="bad">leak</td></tr>
-<tr><td>availability_*, occupancy</td><td>consequence of price</td><td class="warn">excluded</td></tr>
-<tr><td>neighbourhood</td><td>target-encoded inside CV only</td><td class="good">used</td></tr></table>
-<p class="cap">Also: 15 columns are 100 % empty in this snapshot; the long-stay (min. 28 nights) price is half (monthly discount).</p>
-<img src="{f_price}" style="max-height:185px"><p class="cap">Prices are log-normal, so the model is trained on log(price); A and B have almost the same price level.</p></div></div></section>""")
 
-S(f"""<section><h2>Architecture: medallion lakehouse, one parameterised pipeline</h2>
+# 1 ---- title (0:20) ---------------------------------------------------------------------------
+S("""<section class="title"><div>
+<p class="kicker">Group assignment 2 · Big Data · Region 12: Benelux (EUR) · Team BoberRMDT</p>
+<h1>Our pipeline ran a new city without a single error,<br>and that was the problem</h1>
+<p class="sub">Lakehouse and price model built on Brussels (A) and Antwerp (B), then run unchanged on the new client Amsterdam (C)</p>
+<p class="team">Matvii Shumylovych · Dmytro Hrebenyuk</p></div></section>""")
+
+# 2 ---- exploratory analysis (1:00) ------------------------------------------------------------
+S(kick(2, "Exploratory analysis") + f"""<h2>Price is missing for a reason, outliers are mostly placeholders, and four columns are the price</h2>
+<div class="cols"><div><img src="{f_missing}" style="max-height:300px">
+<p class="cap"><b>Missing, explained:</b> no price = no bookable night, so no quote. That is not random, so we <b>don't impute</b>:
+the rows stay in silver for supply metrics and are left out of training.</p>
+<p class="cap"><b>Outliers, explained:</b> above €1,000 (0.5 %) are mostly 0-1-review placeholders (a 1-guest room at €1,500+);
+they are <b>flagged, not deleted</b>. A 25-bedroom, 2-guest flat is a typo: value set to NULL, row kept.</p></div>
+<div><h3>Leakage review: found by exact equality, not by correlation</h3>
+<table class="tight"><tr><th>column</th><th>relation to price</th><th>verdict</th></tr>
+<tr><td>price_quote_price_per_night</td><td>= price (99.96 %)</td><td class="bad">leak</td></tr>
+<tr><td>price_quote_total_price</td><td>= price × nights</td><td class="bad">leak</td></tr>
+<tr><td>price_quote_raw</td><td>JSON that contains the price</td><td class="bad">leak</td></tr>
+<tr><td>estimated_revenue_l365d</td><td>= price × occupancy</td><td class="bad">leak</td></tr>
+<tr><td>availability_*, occupancy</td><td>a consequence of the price</td><td class="warn">excluded</td></tr>
+<tr><td>neighbourhood</td><td>target-encoded inside CV folds only</td><td class="good">used</td></tr></table>
+<p class="cap">Reproducible: the notebook <code>00_eda_brussels_antwerp</code> rebuilds every number from the raw files and never loads Amsterdam.</p></div></div></section>""")
+
+# 3 ---- architecture and pipeline (1:00) -------------------------------------------------------
+S(kick(3, "Architecture and pipeline") + """<h2>Three layers, each with one job, and one pipeline where the city is the only parameter</h2>
 <div class="arch">
-<div class="lane"><div class="box src">Inside Airbnb<br><small>index page: city to latest snapshot URL</small></div></div>
+<div class="lane"><div class="box src">Inside Airbnb<br><small>city → latest snapshot URL, found on the index page</small></div></div>
 <div class="arrow">→</div>
-<div class="lane"><div class="box bronze"><b>Bronze</b><br>raw volume /city/date/<br>bronze_listings<br><small>all strings + lineage</small></div></div>
+<div class="lane"><div class="box bronze"><b>Bronze</b><br><i>keep it as it came</i><br><small>raw file in a UC volume, all strings, lineage</small></div></div>
 <div class="arrow">→</div>
-<div class="lane"><div class="box silver"><b>Silver</b><br>silver_listings · dq_metrics<br><small>column contract, try_cast, price parse,<br>dedup, outlier flags</small></div></div>
+<div class="lane"><div class="box silver"><b>Silver</b><br><i>make it trustworthy</i><br><small>column contract, try_cast, price parsing, dedup, outlier flags, DQ checks</small></div></div>
 <div class="arrow">→</div>
-<div class="lane"><div class="box gold"><b>Gold</b><br>listing_features · city / neighbourhood /<br>room-type metrics · predictions ·<br>model_metrics</div></div>
+<div class="lane"><div class="box gold"><b>Gold</b><br><i>answer questions</i><br><small>features, city / neighbourhood / room-type metrics, predictions, model metrics</small></div></div>
 <div class="arrow">→</div>
-<div class="lane"><div class="box out">AI/BI dashboard<br>Genie space</div></div>
+<div class="lane"><div class="box out">Dashboard<br>Genie</div></div>
 </div>
-<ul class="small">
-<li><b>Job airbnb_city_etl</b>(city): bronze → silver → gold. <b>Job airbnb_lakehouse</b>(cities): for-each city ETL → train (optional) → for-each score → report</li>
-<li>Per-city writes overwrite only that city's partition (<code>replaceWhere</code>), so runs are idempotent and cities run in parallel. <b>Adding a city = one parameter value.</b></li>
-<li>All logic lives in one Python package (<code>src/airbnb_lakehouse</code>); the notebooks parse widgets and call it, and the same code runs locally for tests</li>
-<li>Model versions are immutable files in a UC volume (+ MLflow), so "score Amsterdam with v1" really means the week-1 model</li></ul></section>""")
+<div class="cols"><ul class="small">
+<li><b>Job <code>airbnb_city_etl(city)</code></b>: bronze → silver → gold for one city</li>
+<li><b>Job <code>airbnb_lakehouse(cities)</code></b>: for-each city ETL → train (optional) → for-each score → report</li>
+<li>Each city overwrites only its own partition (<code>replaceWhere</code>): runs are idempotent and cities run in parallel</li></ul>
+<div class="proof"><b>Proof that it really runs per city:</b> Amsterdam was onboarded with one parameter value,<br>
+<code>cities=amsterdam, retrain=false, model_version=v1</code><br>
+No code change: <code>git diff week1-final</code> was empty before the run.</div></div></section>""")
 
-S(f"""<section><h2>The model beats the baseline by 30 % in Brussels and Antwerp</h2>
-<div class="cols"><div><img src="{f_model}"></div><div>
-<ul><li><b>Target</b>: log(price), converted back with exp. <b>Split</b>: deterministic 20 % test per listing (xxhash of id), held out before any choice</li>
-<li><b>Choice</b>: 5-fold CV on the training split. Ridge €42.9, random forest €38.6, <b>gradient boosting €37.9</b>, baseline €51.7</li>
-<li><b>Features</b> (all known before setting a price): guests, bedrooms, bathrooms, room/property type, minimum nights and long-stay flag,
-amenities, reviews, host, distance to the city centre, target-encoded neighbourhood, city</li>
-<li>Most important: guests, bedrooms, minimum nights, city, room type</li>
-<li>Weak spot: the expensive tail. Above €400 the MAE is €173 and prices are under-predicted</li></ul></div></div></section>""")
+# 4 ---- price model (0:50) ---------------------------------------------------------------------
+S(kick(4, "Price model") + f"""<h2>On held-out listings the model beats the baseline by 30 % in both cities</h2>
+<div class="cols"><div><img src="{f_model}"></div><div><ul class="small">
+<li><b>Honest test set</b>: 20 % of listings, picked by a hash of the id, set aside <i>before</i> any choice; the model was chosen by 5-fold CV on the other 80 %</li>
+<li><b>Baseline</b>: median training price for the same room type and number of guests</li>
+<li><b>Candidates (CV MAE)</b>: ridge €42.9, random forest €38.6, <b>gradient boosting €37.9</b>; target is log(price)</li>
+<li><b>Features we can justify</b>: everything a host knows <i>before</i> setting a price: guests, bedrooms, room type, minimum nights, amenities, reviews, distance to centre, neighbourhood</li>
+<li><b>No leakage</b>: the four leak columns and availability are excluded, the neighbourhood encoder is fitted inside CV</li>
+<li><b>Weak spot</b>: above €400 the error is €173 and prices are under-predicted</li></ul></div></div></section>""")
 
-S(f"""<section><h2>City C, first run: no errors, no warnings, and useless prices</h2>
-<div class="cols"><div>
-<ul><li>The frozen pipeline found Amsterdam on the index, downloaded it, typed and cleaned it: <b>exit code 0</b></li>
-<li>Same 90 columns, EUR prices: every format check passed</li>
-<li><b>MAE €158.60</b> on 5,927 priced listings (A+B: €34.91; A+B baseline on C: €195.54)</li>
-<li>95 % of listings under-priced, mean error <b>−€155</b>; highest prediction €601</li>
-<li>Silently passed through: <b>43 %</b> missing prices (A/B: 16-20 %), <b>42 %</b> closed calendars,
-<b>100 %</b> unseen neighbourhoods, 2.2x price level, and 112 genuine homes flagged as "outliers"</li></ul></div>
-<div><table><tr><th></th><th>Brussels</th><th>Antwerp</th><th>Amsterdam</th></tr>
-<tr><td>median price</td><td>€{cm.loc['brussels','median_price']:.0f}</td><td>€{cm.loc['antwerp','median_price']:.0f}</td><td><b>€{cm.loc['amsterdam','median_price']:.0f}</b></td></tr>
-<tr><td>% calendars closed</td><td>13 %</td><td>12 %</td><td><b>42 %</b></td></tr>
-<tr><td>% multi-listing hosts</td><td>53 %</td><td>61 %</td><td><b>19 %</b></td></tr>
-<tr><td>% long-stay</td><td>8 %</td><td>7 %</td><td><b>1 %</b></td></tr>
-<tr><td>price per guest</td><td>€48</td><td>€45</td><td><b>€108</b></td></tr></table>
-<p class="cap">The pipeline was robust to <i>format</i> changes and blind to <i>distribution</i> changes.</p></div></div></section>""")
+# 5 ---- city C first run (0:50) ----------------------------------------------------------------
+S(kick(5, "City C: the first run") + f"""<h2>Amsterdam, first run: exit code 0, no warnings, and 95 % of homes under-priced</h2>
+<div class="tiles">
+<div class="tile"><b>0</b><span>errors or warnings</span></div>
+<div class="tile red"><b>€158.6</b><span>MAE on Amsterdam<br>(€34.9 on Brussels + Antwerp)</span></div>
+<div class="tile red"><b>−€155</b><span>mean error: 95 % under-priced;<br>no prediction above €601</span></div>
+<div class="tile"><b>43 %</b><span>missing prices passed silently<br>(16-20 % in A/B)</span></div>
+<div class="tile"><b>100 %</b><span>neighbourhoods the model<br>has never seen</span></div></div>
+<img src="{f_scatter}" class="wide" style="max-height:300px">
+<p class="cap">Gradient-boosted trees can't predict above the prices they were trained on, so v1 flattens at Belgian levels (middle panel).
+The pipeline coped with changes in <i>format</i> but didn't notice changes in <i>distribution</i>.</p></section>""")
 
-S(f"""<section><h2>Why: a price level the trees never saw, and a different price structure</h2>
-<img src="{f_scatter}" class="wide">
-<img src="{f_struct}" class="wide">
-<p class="cap">Trees cannot extrapolate: v1 predictions flatten around Belgian levels. A single oracle rescaling factor would halve v1's error. Amsterdam also
-differs in structure: per-guest prices are higher, and price falls faster away from the centre.</p></section>""")
-
-S("""<section><h2>What we changed, and which kind of change it was</h2>
+# 6 ---- city C changes classified (0:40) -------------------------------------------------------
+S(kick(6, "City C: changes, classified") + """<h2>Every change since the freeze, sorted into pipeline fixes and model changes</h2>
 <table class="changes"><tr><th>#</th><th>kind</th><th>change</th><th>why</th></tr>
-<tr><td>P1</td><td class="pipe">pipeline</td><td>outlier ceiling = 8x the city's median (was a fixed €1,000)</td><td>the rule encoded Belgian prices; it removed 103 genuine Amsterdam homes</td></tr>
-<tr><td>P2</td><td class="pipe">pipeline</td><td>data-quality expectations to dq_metrics (pass/warn)</td><td>43 % missing target went through silently; it now warns</td></tr>
-<tr><td>P3</td><td class="pipe">pipeline</td><td>scoring coverage report: unseen city, unseen neighbourhoods, price level</td><td>the model must say when it extrapolates</td></tr>
-<tr><td>P4/P5</td><td class="pipe">pipeline</td><td>dq_metrics per layer; city lists as <code>a+b+c</code> via a plan task</td><td>two writers to one table; the CLI splits params on commas</td></tr>
-<tr><td>M1</td><td class="mod">model</td><td>relative target: log(price / city price index), with the index taken from the city's training split</td><td>learn structure, not Belgian euros</td></tr>
-<tr><td>M2</td><td class="mod">model</td><td>drop the one-hot <code>city</code></td><td>meaningless for an unseen city</td></tr>
+<tr><td>P1</td><td class="pipe">pipeline</td><td>outlier ceiling = 8× the city's median (was a fixed €1,000)</td><td>the rule encoded Belgian prices; it deleted 103 genuine Amsterdam homes</td></tr>
+<tr><td>P2</td><td class="pipe">pipeline</td><td>data-quality expectations → <code>dq_metrics</code> pass / warn</td><td>a 43 % missing target went through without a word</td></tr>
+<tr><td>P3</td><td class="pipe">pipeline</td><td>scoring coverage: unseen city, unseen neighbourhoods, price level</td><td>the model has to say when it is extrapolating</td></tr>
+<tr><td>P4-P6</td><td class="pipe">pipeline</td><td>DQ per layer; <code>a+b+c</code> city lists; job dependency fix</td><td>found while deploying, not caused by Amsterdam</td></tr>
+<tr><td>M1</td><td class="mod">model</td><td>relative target: log(price / city price index)</td><td>learn structure, not Belgian euros</td></tr>
+<tr><td>M2</td><td class="mod">model</td><td>drop the one-hot <code>city</code></td><td>it means nothing for an unseen city</td></tr>
 <tr><td>M3</td><td class="mod">model</td><td>retrain with Amsterdam's 80 % training split (v3)</td><td>its structure differs; its 20 % test split stays untouched</td></tr></table>
-<p class="cap">Unchanged because they held up: URL resolution, download, column contract, try_cast typing, parsing, dedup, split.</p></section>""")
+<p class="cap">Left unchanged because it held up on unseen data: URL resolution, download, column contract, try_cast, parsing, dedup, the split.
+Every change is tagged in the code and listed by <code>git diff week1-final</code>.</p></section>""")
 
-S(f"""<section><h2>The numbers: Amsterdam's MAE falls from €172 to €83, and the rest of the gap is proportional</h2>
-<img src="{f_gap}" class="wide">
-<div class="cols"><div><ul class="small">
-<li><b>*</b> €171.8 = v1 on Amsterdam's test split once the outlier fix puts the 103 expensive homes back. The original first run scored <b>€158.6</b> (all priced) / €156.0 (test split)</li>
-<li><b>Price level ≈ €60 of the gap</b>: v1 x (Amsterdam median / A+B median) gives €112.7; v2 gives €108.8, no better than a trivial baseline built on Amsterdam's own data (€111.1)</li></ul></div>
-<div><ul class="small"><li><b>Structure ≈ €26</b>: v3 learns Amsterdam's room-type premiums and distance gradient, 25 % better than that baseline</li>
-<li><b>The rest is proportional</b>: MAPE is 26 % for v3 on Amsterdam and 23 % for v1 at home, so the same relative error lands on 2.2x higher prices</li>
-<li>Cost at home: v3 is €35.1 on Brussels (v1: €32.9), so in production we route A/B to v1 and C to v3</li></ul></div></div></section>""")
+# 7 ---- city C gap explained (0:50) ------------------------------------------------------------
+S(kick(7, "City C: the gap explained") + f"""<h2>Most of the gap is price level; what's left is the same 25 % error on prices twice as high</h2>
+<img src="{f_gap}" class="wide" style="max-height:290px">
+<div class="cols3">
+<div class="pt"><b>≈ €60: price level</b><br>Rescaling v1 by Amsterdam's median gives €112.7. v2 gets €108.8, but a baseline built on Amsterdam alone scores €111.1</div>
+<div class="pt"><b>≈ €26: price structure</b><br>Bigger entire-home premium, steeper drop with distance. v3 learns it: €82.9, 25 % below that baseline</div>
+<div class="pt"><b>The rest: proportional</b><br>Relative error is 26 % for v3 on Amsterdam vs 23 % for v1 at home. Same relative error, on prices 2.2× higher</div></div>
+<p class="cap">* €171.8 = v1 after P1 puts the 103 expensive homes back. The original first run (€158.6) looked better only because those homes had been dropped.</p></section>""")
 
-S("""<section><h2>Dashboard and Genie (live demo)</h2>
-<div class="cols"><div><h3>AI/BI dashboard: 3 pages, each titled with a finding</h3>
-<ul class="small"><li><b>City overview</b>: "Amsterdam costs 2.3x Belgium, and 42 % of its calendars are closed". Listings, price, availability, ratings, room mix, neighbourhoods by price</li>
-<li><b>Cross-city comparison</b>: "Brussels and Antwerp price alike; what differs is the mix". Side-by-side metrics, price distributions, room-type prices, revenue</li>
-<li><b>Model</b>: MAE table for every version and city, predicted vs actual, error by room type and neighbourhood, top under/over-priced listings, pipeline warnings</li></ul></div>
-<div><h3>Genie: the tricks we used to configure it</h3>
-<ul class="small"><li>Only 5 pre-aggregated gold tables; medians precomputed with the dashboard's outlier rule, so answers match the dashboard</li>
-<li>Instructions map "City A/B/C" to slugs, "entire home" to <code>Entire home/apt</code>, and fix the sign of <code>error</code> (negative = under-priced)</li>
-<li>The honest-evaluation filter is written out (test split or new city) so Genie never reports training error</li>
-<li>Production routing (v1 for A/B, v3 for C) as the default model version</li>
-<li>UC comments on every column; trusted example SQL for each sample question</li></ul></div></div></section>""")
+# 8 ---- dashboard and Genie, live demo (1:10) --------------------------------------------------
+S(kick(8, "Dashboard and Genie: live demo") + """<h2>Live demo: each dashboard page opens with its answer, and Genie returns the numbers we expect</h2>
+<div class="cols"><div><h3>AI/BI dashboard: page titles state the finding</h3>
+<ol class="small">
+<li><b>City overview</b>: “Amsterdam costs 2.3× Belgium (median €285 vs €125-130), and 42 % of its calendars are closed”</li>
+<li><b>Cross-city comparison</b>: “Brussels and Antwerp price alike; what differs is the mix (Antwerp: 84 % entire homes, 61 % multi-listing hosts)”</li>
+<li><b>Model</b>: “v1 beats the baseline by 30 % at home but under-priced Amsterdam by €168; the relative model retrained on Amsterdam (v3) cuts its MAE from €172 to €83”, plus the pipeline warnings table</li></ol></div>
+<div><h3>Genie: question → expected answer</h3>
+<table class="tight"><tr><th>we ask</th><th>it should answer</th></tr>
+<tr><td>Median price of entire homes in City A?</td><td>€138 (Brussels, 3,509 homes)</td></tr>
+<tr><td>Neighbourhoods in City B with the most listings?</td><td>Historisch Centrum 397, Amandus-Atheneum 219, Theaterbuurt-Meir 194</td></tr>
+<tr><td>How did the model do on the new city?</td><td>v1 €172 → v2 €109 → v3 €83</td></tr></table>
+<p class="cap">How we got it right: 5 pre-aggregated gold tables, “City A/B/C” mapped in the instructions,
+a trusted SQL example for each question, UC comments on every column, and test-split-only evaluation built into the instructions.</p></div></div></section>""")
 
-S("""<section><h2>Challenges, and who did what</h2>
-<div class="cols"><div><ul class="small">
-<li><b>Holdout discipline</b>: freezing a git tag and a model hash before touching Amsterdam, so the first run is provably unchanged</li>
-<li><b>Leaks hidden in new columns</b> (<code>price_quote_*</code>, revenue): found only by checking exact equalities, not correlations</li>
-<li><b>Missing target</b>: 16-43 % of listings have no price, for structural reasons; deciding not to impute it</li>
-<li><b>Free Edition constraints</b>: serverless only, ANSI SQL (hence try_cast everywhere), no cluster libraries (%pip per notebook)</li>
-<li><b>Silent success</b> is harder to catch than a crash: a stack trace would have been easier to deal with than a confident wrong table</li></ul></div>
+# 9 ---- takeaway + team (0:20) -----------------------------------------------------------------
+S(kick(9, "Takeaway") + """<h2>A crash is easy to spot. We fixed the run that succeeded and was still wrong</h2>
+<div class="cols"><div><ul>
+<li>The week-1 pipeline handled <b>format</b> changes and was blind to <b>distribution</b> changes</li>
+<li>Now it <b>warns</b> when a city doesn't look like the training cities (P2, P3)</li>
+<li>The model learns <b>price relative to the city</b>, which transfers (M1, M2)</li>
+<li>Production routing: v1 for Brussels and Antwerp, v3 for Amsterdam</li></ul></div>
 <div><table><tr><th>member</th><th>contribution</th></tr>
-<tr><td>Matvii Shumylovych</td><td>EDA and leak review, medallion pipeline, Databricks bundle and jobs, Amsterdam first run, pipeline fixes P1-P6, Genie</td></tr><tr><td>Dmytro Hrebenyuk</td><td>Price model v1 and model cards, model changes M1-M3 (v2, v3), city C report, AI/BI dashboard, presentation</td></tr></table></div></div></section>""")
+<tr><td>Matvii Shumylovych</td><td>EDA and leak review, medallion pipeline, Databricks bundle and jobs, Amsterdam first run, pipeline fixes P1-P6, Genie</td></tr>
+<tr><td>Dmytro Hrebenyuk</td><td>Price model v1 and model cards, model changes M1-M3 (v2, v3), city C report, AI/BI dashboard, presentation</td></tr></table>
+<p class="cap">Everything is in the repo: <code>docs/city_c/report.md</code>, model cards, logs of each run.</p></div></div></section>""")
 
 CSS = """
 @page { size: 1280px 720px; margin: 0 }
@@ -282,6 +250,17 @@ code { background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: .92
 .arrow { align-self: center; font-size: 26px; color: #9ca3af } .src { background: #f9fafb } .bronze { background: #fdf0e3; border-color: #f0c79b }
 .silver { background: #f1f5f9; border-color: #cbd5e1 } .gold { background: #fef9e3; border-color: #f3d36b } .out { background: #ecfdf5; border-color: #a7f3d0 }
 small { color: #6b7280 }
+.crit { margin: 0 0 6px; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: #6b7280 }
+.crit span { display: inline-block; background: #0f172a; color: #fff; border-radius: 4px; padding: 1px 7px; margin-right: 10px; letter-spacing: 0 }
+ol { margin: 0; padding-left: 22px; line-height: 1.45 } ol.small { font-size: 16.5px } ol.small li { margin-bottom: 10px }
+table.tight { font-size: 15px } table.tight td, table.tight th { padding: 6px 8px }
+.proof { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 16px 18px; font-size: 16.5px; line-height: 1.6 }
+.tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 4px 0 14px }
+.tile { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; background: #f9fafb }
+.tile b { display: block; font-size: 30px; line-height: 1.1 } .tile span { font-size: 13.5px; color: #4b5563 }
+.tile.red { background: #fef2f2; border-color: #fecaca } .tile.red b { color: #b91c1c }
+.cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 6px }
+.pt { font-size: 15.5px; line-height: 1.4; border-left: 3px solid #059669; padding-left: 12px }
 """
 html = f"<!doctype html><html><head><meta charset='utf-8'><title>Benelux Airbnb lakehouse</title><style>{CSS}</style></head><body>{''.join(SLIDES)}</body></html>"
 with open(OUT_HTML, "w", encoding="utf-8") as fh:
